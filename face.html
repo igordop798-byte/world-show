@@ -204,8 +204,10 @@ const GROUPS=[
   ["глаза",NAMES.filter(n=>/^eye/.test(n))],
   ["брови",NAMES.filter(n=>/^brow/.test(n))],
   ["щёки и нос",NAMES.filter(n=>/^(cheek|nose)/.test(n))]];
-/* в модели имена вида browDown_L — переводим */
-const toMorph=n=>n.replace(/Left$/,"_L").replace(/Right$/,"_R");
+/* в модели парные имена вида browDown_L. Но jawLeft/jawRight/mouthLeft/mouthRight —
+   это сдвиг челюсти и рта вбок, а не сторона лица: их имена совпадают как есть */
+const SAME=new Set(["jawLeft","jawRight","mouthLeft","mouthRight"]);
+const toMorph=n=>SAME.has(n)?n:n.replace(/Left$/,"_L").replace(/Right$/,"_R");
 
 const bsEls={};
 (function(){const host=$("#bsList");
@@ -227,19 +229,20 @@ function initThree(){
   const cv=$("#three");
   rnd=new THREE.WebGLRenderer({canvas:cv,antialias:true});
   rnd.setPixelRatio(Math.min(devicePixelRatio,2));
-  rnd.toneMapping=THREE.ACESFilmicToneMapping;rnd.toneMappingExposure=1.15;
+  rnd.toneMapping=THREE.ACESFilmicToneMapping;rnd.toneMappingExposure=.9;
   rnd.shadowMap.enabled=true;rnd.shadowMap.type=THREE.PCFSoftShadowMap;
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0f17);
   cam3=new THREE.PerspectiveCamera(24,1,.01,100);
   const pm=new THREE.PMREMGenerator(rnd);
   scene.environment=pm.fromScene(new RoomEnvironment(),.03).texture;
-
-  const key=new THREE.DirectionalLight(0xfff2e6,2.4);key.position.set(-1.6,1.8,2.4);
+  // света немного: у модели своя текстура кожи, пересвет съедает и тон, и брови
+  const key=new THREE.DirectionalLight(0xfff2e6,1.15);key.position.set(-1.6,1.8,2.4);
   key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.bias=-.0015;
   scene.add(key);
-  const fill=new THREE.DirectionalLight(0x9ec4ff,.55);fill.position.set(2.4,.2,1.6);scene.add(fill);
-  const rim=new THREE.DirectionalLight(0xffd0a0,2.0);rim.position.set(1.2,1.2,-2.2);scene.add(rim);
-  scene.add(new THREE.AmbientLight(0x50607a,.45));
+  const fill=new THREE.DirectionalLight(0x9ec4ff,.22);fill.position.set(2.4,.2,1.6);scene.add(fill);
+  const rim=new THREE.DirectionalLight(0xffd0a0,.85);rim.position.set(1.2,1.2,-2.2);scene.add(rim);
+  const amb=new THREE.AmbientLight(0x50607a,.12);scene.add(amb);
+  S.lights={key,fill,rim,amb};
   const bg=new THREE.Mesh(new THREE.PlaneGeometry(40,24),
     new THREE.MeshBasicMaterial({color:0x10151f}));
   bg.position.z=-8;scene.add(bg);
@@ -277,7 +280,7 @@ async function loadHead(){
   eyeL=inner.getObjectByName("eyeLeft");
   eyeR=inner.getObjectByName("eyeRight");
   inner.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;
-    if(o.material){o.material.envMapIntensity=.85;o.material.roughness=Math.min(1,(o.material.roughness??.8))}}});
+    if(o.material){o.material.envMapIntensity=.55;o.material.roughness=.72}}});
   root.add(inner);
   // центрируем голову в нуле и приводим к понятному масштабу
   inner.updateMatrixWorld(true);
@@ -296,9 +299,12 @@ async function loadHead(){
     if(m in dict){morphIdx[n]=dict[m];matched++;bsEls[n].name.classList.add("on");bsEls[n].bar.classList.add("live")}
     else bsEls[n].name.style.opacity=.45;
   }
-  chip("#cMap",matched+" / 52",matched>45?"good":"");
+  chip("#cMap",matched+" / 52",matched>=52?"good":"");
   setView("face");
   loadEl.classList.add("hidden");
+  // наружу для живой подстройки из консоли
+  window.__dbg={rnd,scene,cam3,root,head,teeth,eyeL,eyeR,S,lights:S.lights,
+    exposure:v=>{rnd.toneMappingExposure=v}};
 }
 function setView(k){
   S.view=k;const v=VIEWS[k];
