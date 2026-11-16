@@ -120,6 +120,19 @@
         <div class="hint" style="margin-top:7px">Мышью — повернуть, колесом — приблизить.</div>
       </div>
       <div class="card">
+        <h2>Персонаж</h2>
+        <div class="seg3" id="skinMode" style="margin-bottom:6px">
+          <button data-k="light">Светлый</button>
+          <button data-k="warm" class="on">Тёплый</button>
+          <button data-k="tan">Смуглый</button>
+        </div>
+        <div class="seg3" id="hairMode">
+          <button data-k="dark" class="on">Тёмные</button>
+          <button data-k="light">Светлые</button>
+          <button data-k="none">Лысый</button>
+        </div>
+      </div>
+      <div class="card">
         <h2>Мимика</h2>
         <div class="sl">
           <div class="t"><span>сила выражений</span><b id="vGain">1.3×</b></div>
@@ -186,7 +199,7 @@ const chip=(id,t,c)=>{const e=$(id);e.querySelector("b").textContent=t;e.classNa
 const S={face:null,running:false,tracking:false,lastVT:-1,res:null,fps:[],ms:[],
   raw:{},sm:{},head:{yaw:0,pitch:0,roll:0},on:false,freeze:false,
   gain:1.3,smooth:.45,eyeGain:1,useHead:true,wire:false,mirror:true,onlyLive:false,idle:true,
-  view:"face",orbit:{az:0,el:0,d:1,drag:null}};
+  skin:"warm",hair:"dark",view:"face",orbit:{az:0,el:0,d:1,drag:null}};
 
 /* 52 имени ARKit ровно в том виде, в каком их отдаёт MediaPipe */
 const NAMES=["browDownLeft","browDownRight","browInnerUp","browOuterUpLeft","browOuterUpRight",
@@ -221,7 +234,9 @@ const bsEls={};
     }}})();
 
 /* ═════════ сцена ═════════ */
-let rnd,scene,cam3,composer,bloom,root,head,teeth,eyeL,eyeR,influences={},morphIdx={},matched=0;
+let rnd,scene,cam3,composer,bloom,root,head,teeth,eyeL,eyeR,hair=null,influences={},morphIdx={},matched=0;
+const SKINS={light:0xf0cdb6,warm:0xe8b89a,tan:0xc08a66};
+const HAIRS={dark:0x241a16,light:0x9a7b50,none:null};
 const VIEWS={face:{d:1,y:.02,fov:24},three_q:{d:1.12,y:.01,fov:26},wide:{d:1.95,y:-.22,fov:30}};
 let headBox=null;
 
@@ -229,18 +244,19 @@ function initThree(){
   const cv=$("#three");
   rnd=new THREE.WebGLRenderer({canvas:cv,antialias:true});
   rnd.setPixelRatio(Math.min(devicePixelRatio,2));
-  rnd.toneMapping=THREE.ACESFilmicToneMapping;rnd.toneMappingExposure=.9;
+  rnd.toneMapping=THREE.ACESFilmicToneMapping;rnd.toneMappingExposure=1.0;
   rnd.shadowMap.enabled=true;rnd.shadowMap.type=THREE.PCFSoftShadowMap;
+  rnd.localClippingEnabled=true;
   scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0f17);
   cam3=new THREE.PerspectiveCamera(24,1,.01,100);
   const pm=new THREE.PMREMGenerator(rnd);
   scene.environment=pm.fromScene(new RoomEnvironment(),.03).texture;
   // света немного: у модели своя текстура кожи, пересвет съедает и тон, и брови
-  const key=new THREE.DirectionalLight(0xfff2e6,1.15);key.position.set(-1.6,1.8,2.4);
+  const key=new THREE.DirectionalLight(0xfff2e6,1.35);key.position.set(-1.6,1.8,2.4);
   key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.bias=-.0015;
   scene.add(key);
-  const fill=new THREE.DirectionalLight(0x9ec4ff,.22);fill.position.set(2.4,.2,1.6);scene.add(fill);
-  const rim=new THREE.DirectionalLight(0xffd0a0,.85);rim.position.set(1.2,1.2,-2.2);scene.add(rim);
+  const fill=new THREE.DirectionalLight(0x9ec4ff,.3);fill.position.set(2.4,.2,1.6);scene.add(fill);
+  const rim=new THREE.DirectionalLight(0xffd0a0,1.0);rim.position.set(1.2,1.2,-2.2);scene.add(rim);
   const amb=new THREE.AmbientLight(0x50607a,.12);scene.add(amb);
   S.lights={key,fill,rim,amb};
   const bg=new THREE.Mesh(new THREE.PlaneGeometry(40,24),
@@ -299,12 +315,46 @@ async function loadHead(){
     if(m in dict){morphIdx[n]=dict[m];matched++;bsEls[n].name.classList.add("on");bsEls[n].bar.classList.add("live")}
     else bsEls[n].name.style.opacity=.45;
   }
+  buildHair();applySkin();applyHair();
   chip("#cMap",matched+" / 52",matched>=52?"good":"");
-  setView("face");
+  setView("face");S.orbit.az=.2;
   loadEl.classList.add("hidden");
   // наружу для живой подстройки из консоли
   window.__dbg={rnd,scene,cam3,root,head,teeth,eyeL,eyeR,S,lights:S.lights,
     exposure:v=>{rnd.toneMappingExposure=v}};
+}
+/* волосы: вторая копия той же геометрии, чуть больше, обрезанная плоскостью по линии роста.
+   Плоскость задаётся в системе root и каждый кадр переводится в мировую, иначе при
+   повороте головы причёска съезжала бы на лицо. */
+let hairLocal=null,hairWorld=null;
+function buildHair(){
+  const geo=head.geometry;
+  geo.computeBoundingBox();
+  const C=new THREE.Vector3();geo.boundingBox.getCenter(C);
+  const s=1.022;
+  const mat=new THREE.MeshStandardMaterial({color:HAIRS.dark,roughness:.6,metalness:.05,
+    envMapIntensity:.45,side:THREE.DoubleSide});
+  hair=new THREE.Mesh(geo,mat);
+  hair.scale.setScalar(s);hair.position.copy(C).multiplyScalar(1-s);
+  hair.castShadow=true;head.parent.add(hair);
+  // куда смотрит лицо — по положению глаз относительно центра головы
+  root.updateMatrixWorld(true);
+  const hc=new THREE.Vector3().setFromMatrixPosition(head.matrixWorld);
+  const e1=new THREE.Vector3().setFromMatrixPosition(eyeL.matrixWorld);
+  const e2=new THREE.Vector3().setFromMatrixPosition(eyeR.matrixWorld);
+  const front=Math.sign(e1.add(e2).multiplyScalar(.5).z-hc.z)||1;
+  const n=new THREE.Vector3(0,.857,-.514*front).normalize();
+  const pt=new THREE.Vector3(0,.17,.42*front);
+  hairLocal=new THREE.Plane().setFromNormalAndCoplanarPoint(n,pt);
+  hairWorld=hairLocal.clone();
+  mat.clippingPlanes=[hairWorld];
+}
+function applySkin(){if(head)head.material.color.setHex(SKINS[S.skin]||SKINS.warm)}
+function applyHair(){
+  if(!hair)return;
+  const c=HAIRS[S.hair];
+  hair.visible=c!==null;
+  if(c!==null)hair.material.color.setHex(c);
 }
 function setView(k){
   S.view=k;const v=VIEWS[k];
@@ -430,6 +480,7 @@ function loop(){
     lmk=S.res?.faceLandmarks?.[0]||null;
   }
   driveMorphs(dt);driveHead(dt);
+  if(hairWorld&&root){root.updateMatrixWorld();hairWorld.copy(hairLocal).applyMatrix4(root.matrixWorld)}
   if(head)head.material.wireframe=S.wire;
   updateCamera();
   if(composer)composer.render();
@@ -455,6 +506,10 @@ function loop(){
 
 /* ═════════ UI ═════════ */
 (function(){const h=$("#viewMode");[...h.children].forEach(b=>b.onclick=()=>setView(b.dataset.k))})();
+(function(){const h=$("#skinMode");[...h.children].forEach(b=>b.onclick=()=>{
+  S.skin=b.dataset.k;[...h.children].forEach(c=>c.classList.toggle("on",c===b));applySkin()})})();
+(function(){const h=$("#hairMode");[...h.children].forEach(b=>b.onclick=()=>{
+  S.hair=b.dataset.k;[...h.children].forEach(c=>c.classList.toggle("on",c===b));applyHair()})})();
 $("#sGain").oninput=e=>{S.gain=+e.target.value;$("#vGain").textContent=S.gain.toFixed(2)+"×"};
 $("#sSm").oninput=e=>{S.smooth=+e.target.value;$("#vSm").textContent=S.smooth.toFixed(2)};
 $("#sEye").oninput=e=>{S.eyeGain=+e.target.value;$("#vEye").textContent=S.eyeGain.toFixed(2)+"×"};
