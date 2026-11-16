@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Лицевой риг — портретный тест</title>
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+}}
+</script>
+<style>
+  :root{--bg:#07090e;--panel:#0f141c;--panel2:#161e29;--line:#222c3a;--tx:#e9eff8;--tx2:#8b9bb4;
+    --acc:#49e3a4;--acc2:#5aa9ff;--warn:#ffb347;--bad:#ff5c6c;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+  #app{display:flex;flex-direction:column;height:100%}
+  header{display:flex;align-items:center;gap:6px;padding:6px 10px;background:var(--panel);
+    border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
+  .brand{font-weight:700;font-size:13px}.brand span{color:var(--acc)}
+  .chip{font-family:var(--mono);font-size:10.5px;padding:3px 7px;border-radius:999px;background:var(--panel2);
+    border:1px solid var(--line);color:var(--tx2);white-space:nowrap}
+  .chip b{color:var(--tx);font-weight:600}
+  .chip.good{border-color:#1f5c45;color:var(--acc)}.chip.bad{border-color:#5c2430;color:var(--bad)}
+  .spacer{flex:1}
+  a.back{font-size:11.5px;color:var(--acc2);text-decoration:none}
+  main{display:grid;grid-template-columns:1fr 330px;gap:8px;padding:8px;min-height:0;flex:1 1 auto}
+  @media (max-width:980px){main{grid-template-columns:1fr;grid-template-rows:minmax(300px,1fr) auto;overflow:auto}}
+  #stage{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#05070b}
+  #three{display:block;width:100%;height:100%}
+  #cam{display:none}
+  #pip{position:absolute;left:8px;bottom:8px;width:180px;border:1px solid rgba(255,255,255,.18);
+    border-radius:8px;overflow:hidden;background:#000;opacity:.9;z-index:3}
+  #pip canvas{display:block;width:100%}
+  #hud{position:absolute;inset:0;pointer-events:none;z-index:2}
+  #hHead{position:absolute;right:12px;top:10px;font-family:var(--mono);font-size:11.5px;
+    color:#bfcde0;text-align:right;white-space:pre;text-shadow:0 2px 10px #000}
+  #hNote{position:absolute;left:0;right:0;bottom:10px;text-align:center;font-size:12px;color:#9fb0c8}
+  #gate{position:absolute;inset:0;z-index:9;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:13px;text-align:center;padding:24px;background:rgba(5,7,11,.96)}
+  #gate h1{font-size:19px;margin:0}
+  #gate p{color:var(--tx2);font-size:13px;max-width:540px;line-height:1.55;margin:0}
+  #gate.hidden{display:none}
+  .err{color:var(--bad);font-size:12.5px;white-space:pre-line;line-height:1.5}
+  aside{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:auto}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:9px 10px}
+  .card h2{font-size:10px;text-transform:uppercase;letter-spacing:.9px;color:var(--tx2);margin:0 0 8px;font-weight:700}
+  button{font:inherit;font-size:12.5px;font-weight:600;padding:8px 12px;border-radius:9px;cursor:pointer;
+    background:var(--panel2);color:var(--tx);border:1px solid var(--line);transition:.12s}
+  button:hover:not(:disabled){border-color:#3b4b66;background:#1f2a3a}
+  button.primary{background:var(--acc);color:#06281c;border-color:transparent}
+  button:disabled{opacity:.4;cursor:default}
+  .seg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .seg3 button.on{border-color:var(--acc);color:var(--acc)}
+  .row{display:flex;gap:6px;flex-wrap:wrap}.row.col{flex-direction:column}
+  label.ck{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;cursor:pointer;user-select:none}
+  label.ck input{accent-color:var(--acc);width:15px;height:15px}
+  /* панель коэффициентов */
+  .grp{font-size:9.5px;text-transform:uppercase;letter-spacing:.8px;color:#6c7f99;margin:8px 0 4px}
+  .bsrow{display:grid;grid-template-columns:116px 1fr 30px;gap:6px;align-items:center;margin-bottom:2px}
+  .bsrow span{font-size:10.5px;font-family:var(--mono);color:var(--tx2);overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .bsrow span.on{color:var(--tx)}
+  .bsrow b{font-size:9.5px;font-family:var(--mono);color:var(--tx2);text-align:right}
+  .bb{position:relative;height:5px;background:#0a0f16;border-radius:3px;overflow:hidden}
+  .bb i{position:absolute;top:0;bottom:0;left:0;background:#2e3d52;border-radius:3px}
+  .bb i.live{background:var(--acc)}
+  .hint{font-size:11px;color:var(--tx2);line-height:1.5}
+  kbd{font-family:var(--mono);font-size:10.5px;background:#0a0f16;border:1px solid var(--line);
+    border-radius:4px;padding:1px 4px}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand">Лицевой <span>риг</span></div>
+    <div class="chip" id="cFps">FPS <b>—</b></div>
+    <div class="chip" id="cMs">лицо <b>—</b></div>
+    <div class="chip" id="cFace">трекинг <b>нет</b></div>
+    <div class="chip" id="cWired">подключено <b>—</b></div>
+    <div class="spacer"></div>
+    <a class="back" href="./">← к мосту</a>
+  </header>
+  <main>
+    <section id="stage">
+      <video id="cam" playsinline autoplay muted></video>
+      <canvas id="three"></canvas>
+      <div id="hud">
+        <div id="hHead"></div>
+        <div id="hNote"></div>
+      </div>
+      <div id="pip"><canvas id="pipc"></canvas></div>
+      <div id="gate">
+        <h1>Портретный тест мимики</h1>
+        <p>Одна модель — Face Landmarker: 478 точек лица, 52 коэффициента ARKit и матрица поворота головы.
+          Каждый коэффициент подключён к деформации геометрии: веки реально опускаются на глазное яблоко,
+          губы пересчитываются по вершинам, челюсть открывается, щёки надуваются.<br>
+          Сядь близко к камере, лицо в кадре крупно, свет спереди.</p>
+        <button class="primary" id="btnStart">Включить камеру</button>
+        <p class="err" id="gateErr"></p>
+      </div>
+    </section>
+    <aside>
+      <div class="card">
+        <h2>Вид</h2>
+        <div class="seg3" id="viewMode">
+          <button data-k="face" class="on">Лицо</button>
+          <button data-k="three_q">3/4</button>
+          <button data-k="wide">Погрудно</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Персонаж</h2>
+        <div class="seg3" id="skinMode">
+          <button data-k="warm" class="on">Тёплый</button>
+          <button data-k="pale">Фарфор</button>
+          <button data-k="green">Зелёный</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Отладка</h2>
+        <div class="row col">
+          <label class="ck"><input type="checkbox" id="optWire"> Каркас сетки</label>
+          <label class="ck"><input type="checkbox" id="optPts"> Контрольные точки рига</label>
+          <label class="ck"><input type="checkbox" id="optHead" checked> Повороты головы</label>
+          <label class="ck"><input type="checkbox" id="optMirror" checked> Зеркалить превью</label>
+          <label class="ck"><input type="checkbox" id="optFreeze"> Заморозить выражение <kbd>F</kbd></label>
+          <label class="ck"><input type="checkbox" id="optOnlyLive" checked> Показывать только активные</label>
+        </div>
+      </div>
+      <div class="card">
+        <h2>52 коэффициента ARKit</h2>
+        <div class="hint" style="margin-bottom:7px">Зелёным — те, что подключены к геометрии.
+          Серым — которые модель отдаёт, но я их не использую.</div>
+        <div id="bsList"></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+setTimeout(function(){
+  if(!window.__ready){var e=document.getElementById("gateErr");
+    if(e)e.textContent="Не загрузились библиотеки с CDN. Проверь интернет и перезагрузи страницу.";}
+},7000);
+</script>
+<script type="module">
+import * as THREE from "three";
+import {EffectComposer} from "three/addons/postprocessing/EffectComposer.js";
+import {RenderPass} from "three/addons/postprocessing/RenderPass.js";
+import {UnrealBloomPass} from "three/addons/postprocessing/UnrealBloomPass.js";
+import {OutputPass} from "three/addons/postprocessing/OutputPass.js";
+import {RoomEnvironment} from "three/addons/environments/RoomEnvironment.js";
+
+/* ═════════ MediaPipe ═════════ */
+const MP_V=["0.10.35","0.10.33","latest"];
+const FACE_MODEL="https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+let MP=null,WASM=null;
+async function loadMP(){let err;
+  for(const v of MP_V){try{
+    const m=await import(`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${v}/vision_bundle.mjs`);
+    if(!m.FaceLandmarker)throw new Error("битая сборка");
+    MP=m;WASM=`https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${v}/wasm`;return v;
+  }catch(e){err=e}} throw err}
+
+const $=s=>document.querySelector(s);
+const video=$("#cam"),gate=$("#gate"),gateErr=$("#gateErr");
+const pipc=$("#pipc"),pctx=pipc.getContext("2d");
+const clamp=(v,a,b)=>v<a?a:v>b?b:v, lerp=(a,b,t)=>a+(b-a)*t;
+const sm=(v)=>v*v*(3-2*v);
+const chip=(id,t,c)=>{const e=$(id);e.querySelector("b").textContent=t;e.className="chip"+(c?" "+c:"")};
+
+const S={face:null,running:false,lastVT:-1,res:null,fps:[],ms:[],
+  bs:{},raw:{},head:{yaw:0,pitch:0,roll:0},on:false,freeze:false,
+  view:"face",skin:"warm",wire:false,pts:false,useHead:true,mirror:true,onlyLive:true};
+
+/* ═════════ список коэффициентов ═════════ */
+const WIRED=new Set(["jawOpen","jawLeft","jawRight","jawForward",
+  "mouthSmileLeft","mouthSmileRight","mouthFrownLeft","mouthFrownRight",
+  "mouthPucker","mouthFunnel","mouthLeft","mouthRight","mouthClose",
+  "mouthUpperUpLeft","mouthUpperUpRight","mouthLowerDownLeft","mouthLowerDownRight",
+  "mouthPressLeft","mouthPressRight","mouthStretchLeft","mouthStretchRight",
+  "mouthDimpleLeft","mouthDimpleRight","mouthShrugUpper","mouthShrugLower",
+  "mouthRollUpper","mouthRollLower",
+  "eyeBlinkLeft","eyeBlinkRight","eyeWideLeft","eyeWideRight",
+  "eyeSquintLeft","eyeSquintRight",
+  "eyeLookInLeft","eyeLookOutLeft","eyeLookUpLeft","eyeLookDownLeft",
+  "eyeLookInRight","eyeLookOutRight","eyeLookUpRight","eyeLookDownRight",
+  "browDownLeft","browDownRight","browInnerUp","browOuterUpLeft","browOuterUpRight",
+  "cheekPuff","cheekSquintLeft","cheekSquintRight",
+  "noseSneerLeft","noseSneerRight"]);
+const GROUPS=[
+  ["челюсть и рот",["jawOpen","jawForward","jawLeft","jawRight","mouthClose","mouthFunnel","mouthPucker",
+    "mouthLeft","mouthRight","mouthSmileLeft","mouthSmileRight","mouthFrownLeft","mouthFrownRight",
+    "mouthDimpleLeft","mouthDimpleRight","mouthStretchLeft","mouthStretchRight",
+    "mouthRollLower","mouthRollUpper","mouthShrugLower","mouthShrugUpper",
+    "mouthPressLeft","mouthPressRight","mouthLowerDownLeft","mouthLowerDownRight",
+    "mouthUpperUpLeft","mouthUpperUpRight"]],
+  ["глаза",["eyeBlinkLeft","eyeBlinkRight","eyeLookDownLeft","eyeLookDownRight","eyeLookInLeft",
+    "eyeLookInRight","eyeLookOutLeft","eyeLookOutRight","eyeLookUpLeft","eyeLookUpRight",
+    "eyeSquintLeft","eyeSquintRight","eyeWideLeft","eyeWideRight"]],
+  ["брови",["browDownLeft","browDownRight","browInnerUp","browOuterUpLeft","browOuterUpRight"]],
+  ["щёки и нос",["cheekPuff","cheekSquintLeft","cheekSquintRight","noseSneerLeft","noseSneerRight"]],
+  ["прочее",["tongueOut","_neutral"]]
+];
+const bsEls={};
+(function buildPanel(){
+  const host=$("#bsList");
+  for(const [title,names] of GROUPS){
+    const h=document.createElement("div");h.className="grp";h.textContent=title;
+    host.appendChild(h);
+    for(const n of names){
+      const d=document.createElement("div");d.className="bsrow";
+      d.innerHTML=`<span class="${WIRED.has(n)?"on":""}">${n}</span>
+        <div class="bb"><i class="${WIRED.has(n)?"live":""}"></i></div><b>0</b>`;
+      host.appendChild(d);
+      bsEls[n]={row:d,bar:d.querySelector("i"),val:d.querySelector("b")};
+    }
+  }
+  chip("#cWired",WIRED.size+" / 52");
+})();
+
+/* ═════════ камера и модель ═════════ */
+async function startCamera(){
+  if(!navigator.mediaDevices?.getUserMedia)throw new Error("Браузер не отдаёт камеру.");
+  video.srcObject=await navigator.mediaDevices.getUserMedia({audio:false,
+    video:{facingMode:"user",width:{ideal:1280},height:{ideal:720},frameRate:{ideal:30}}});
+  await video.play();
+  await new Promise(r=>video.readyState>=2?r():video.addEventListener("loadeddata",r,{once:true}));
+  pipc.width=320;pipc.height=Math.round(320*video.videoHeight/video.videoWidth);
+}
+async function buildFace(){
+  const fs=await MP.FilesetResolver.forVisionTasks(WASM);
+  const mk=d=>MP.FaceLandmarker.createFromOptions(fs,{
+    baseOptions:{modelAssetPath:FACE_MODEL,delegate:d},runningMode:"VIDEO",numFaces:1,
+    outputFaceBlendshapes:true,outputFacialTransformationMatrixes:true});
+  try{S.face=await mk("GPU")}catch(e){S.face=await mk("CPU")}
+}
+function readFace(res){
+  S.on=!!res?.faceBlendshapes?.length;
+  if(!S.on||S.freeze)return;
+  for(const c of res.faceBlendshapes[0].categories){
+    const v=c.score;
+    S.raw[c.categoryName]=v;
+    S.bs[c.categoryName]=lerp(S.bs[c.categoryName]??v,v,.5);
+  }
+  const m=res.facialTransformationMatrixes?.[0];
+  if(m){const d=m.data,r=(i,j)=>d[j*4+i],sy=Math.hypot(r(0,0),r(1,0));
+    S.head.yaw=lerp(S.head.yaw,Math.atan2(-r(2,0),sy),.45);
+    S.head.pitch=lerp(S.head.pitch,Math.atan2(r(2,1),r(2,2)),.45);
+    S.head.roll=lerp(S.head.roll,Math.atan2(r(1,0),r(0,0)),.45)}
+}
+const B=n=>S.bs[n]||0;
+
+/* ═════════ сцена ═════════ */
+const SKINS={
+  warm:{skin:0xd8a080,skin2:0xb87a5c,lip:0xb5614f,brow:0x3a2418,iris:0x5b8c6a,sclera:0xf2efe9},
+  pale:{skin:0xeadfd8,skin2:0xc9b3ab,lip:0xc47a76,brow:0x6b5a4e,iris:0x6a8bb0,sclera:0xfbf8f4},
+  green:{skin:0x7fb089,skin2:0x4f7a5e,lip:0x9a5f6e,brow:0x2e4536,iris:0xd8c25a,sclera:0xeef4ea}
+};
+let rnd,scene,cam3,composer,bloom,headGrp,skull,skullGeo,base,regions,MAT={};
+let eyeL,eyeR,irisL,irisR,lidUL,lidLL,lidUR,lidLR,browL,browR,lips,lipGeo,cavity,teethU,teethL,tongue;
+let rigPts=null,neck=null,hairCap=null;
+
+const EYE={x:.255,y:.085,z:.645,r:.1};     // положение глаз на голове
+const MOUTH={y:-.37,z:.78};
+
+function initThree(){
+  const cv=$("#three");
+  rnd=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  rnd.setPixelRatio(Math.min(devicePixelRatio,2));
+  rnd.toneMapping=THREE.ACESFilmicToneMapping;rnd.toneMappingExposure=1.05;
+  rnd.shadowMap.enabled=true;rnd.shadowMap.type=THREE.PCFSoftShadowMap;
+  scene=new THREE.Scene();scene.background=new THREE.Color(0x0a0d14);
+  cam3=new THREE.PerspectiveCamera(30,1,.05,60);
+  // студийное окружение для мягких отражений в коже и глазах
+  const pm=new THREE.PMREMGenerator(rnd);
+  scene.environment=pm.fromScene(new RoomEnvironment(),.04).texture;
+
+  const key=new THREE.DirectionalLight(0xfff0e2,2.6);key.position.set(-2.2,2.6,3.2);
+  key.castShadow=true;key.shadow.mapSize.set(1024,1024);key.shadow.bias=-.0012;
+  key.shadow.camera.left=-2;key.shadow.camera.right=2;key.shadow.camera.top=2;key.shadow.camera.bottom=-2;
+  scene.add(key);
+  const fillL=new THREE.DirectionalLight(0x9ec4ff,.6);fillL.position.set(3,.4,2);scene.add(fillL);
+  const rim=new THREE.DirectionalLight(0xffd9a8,2.2);rim.position.set(1.6,1.4,-2.6);scene.add(rim);
+  scene.add(new THREE.AmbientLight(0x404a5e,.5));
+  // фон-градиент
+  const bg=new THREE.Mesh(new THREE.PlaneGeometry(26,16),
+    new THREE.MeshBasicMaterial({color:0x121824}));
+  bg.position.set(0,0,-6);scene.add(bg);
+
+  buildHead();
+  composer=new EffectComposer(rnd);
+  composer.addPass(new RenderPass(scene,cam3));
+  bloom=new UnrealBloomPass(new THREE.Vector2(1,1),.3,.8,.95);
+  composer.addPass(bloom);composer.addPass(new OutputPass());
+  applySkin();setView("face");
+  resize();addEventListener("resize",resize);
+}
+function resize(){const st=$("#stage"),w=st.clientWidth,h=st.clientHeight;
+  rnd.setSize(w,h,false);composer.setSize(w,h);bloom.setSize(w,h);
+  cam3.aspect=w/Math.max(1,h);cam3.updateProjectionMatrix()}
+
+/* ── голова: сфера, вылепленная в форму головы ── */
+function headShape(p){
+  const v=p.clone();
+  v.z*=1.06;                                   // чуть вытянуть вперёд
+  const t=clamp((.35-v.y)/1.2,0,1);            // 0 наверху, 1 внизу
+  const taper=1-sm(t)*.30;                     // сужение к подбородку
+  v.x*=taper*.92; v.z*=lerp(1,.86,sm(t));
+  if(v.y<-.1){const k=sm(clamp((-v.y-.1)/.9,0,1)); v.z+=k*.08; v.y-=k*.1}   // подбородок
+  if(v.y>.45){const k=sm((v.y-.45)/.55); v.z-=k*.1; v.y+=k*.05}             // темя
+  // надбровные дуги
+  const br=Math.exp(-(Math.pow((v.y-.21)/.1,2)+Math.pow((Math.abs(v.x)-.26)/.22,2)));
+  v.z+=br*.045*Math.max(0,v.z);
+  // скулы
+  const ch=Math.exp(-(Math.pow((v.y+.12)/.17,2)+Math.pow((Math.abs(v.x)-.34)/.2,2)));
+  v.x+=ch*.035*Math.sign(v.x); v.z+=ch*.02;
+  // глазницы
+  const eyeHole=Math.exp(-(Math.pow((v.y-EYE.y)/.1,2)+Math.pow((Math.abs(v.x)-EYE.x)/.13,2)));
+  if(v.z>0)v.z-=eyeHole*.085;
+  // нос
+  const nz=Math.exp(-(Math.pow(v.y/.2,2)+Math.pow(v.x/.07,2)));
+  if(v.z>.3){v.z+=nz*.11;}
+  return v;
+}
+function gauss(d,s){return Math.exp(-(d*d)/(2*s*s))}
+function buildHead(){
+  headGrp=new THREE.Group();scene.add(headGrp);
+  skullGeo=new THREE.SphereGeometry(1,96,72);
+  const pos=skullGeo.attributes.position;
+  base=new Float32Array(pos.count*3);
+  for(let i=0;i<pos.count;i++){
+    const v=headShape(new THREE.Vector3(pos.getX(i),pos.getY(i),pos.getZ(i)));
+    pos.setXYZ(i,v.x,v.y,v.z);base[i*3]=v.x;base[i*3+1]=v.y;base[i*3+2]=v.z;
+  }
+  skullGeo.computeVertexNormals();
+  MAT.skin=new THREE.MeshPhysicalMaterial({color:0xd8a080,roughness:.62,metalness:0,
+    clearcoat:.18,clearcoatRoughness:.5,sheen:.4,sheenColor:new THREE.Color(0xff9a7a),
+    envMapIntensity:.9});
+  skull=new THREE.Mesh(skullGeo,MAT.skin);skull.castShadow=true;skull.receiveShadow=true;
+  headGrp.add(skull);
+  // веса зон: считаем один раз
+  regions={jaw:new Float32Array(pos.count),mouth:new Float32Array(pos.count),
+    cornerL:new Float32Array(pos.count),cornerR:new Float32Array(pos.count),
+    upLip:new Float32Array(pos.count),lowLip:new Float32Array(pos.count),
+    cheekL:new Float32Array(pos.count),cheekR:new Float32Array(pos.count),
+    noseL:new Float32Array(pos.count),noseR:new Float32Array(pos.count),
+    underEyeL:new Float32Array(pos.count),underEyeR:new Float32Array(pos.count)};
+  const M=new THREE.Vector3(0,MOUTH.y,MOUTH.z);
+  for(let i=0;i<pos.count;i++){
+    const x=base[i*3],y=base[i*3+1],z=base[i*3+2];
+    const front=clamp(z,0,1);
+    const dM=Math.hypot(x,(y-MOUTH.y)*1.25,(z-MOUTH.z)*.6);
+    regions.mouth[i]=gauss(dM,.26)*front;
+    regions.jaw[i]=clamp((-.12-y)/.75,0,1)*front*(1-gauss(dM,.1)*.3);
+    regions.cornerL[i]=gauss(Math.hypot(x+.17,(y-MOUTH.y)*1.1,(z-.72)*.7),.17)*front;
+    regions.cornerR[i]=gauss(Math.hypot(x-.17,(y-MOUTH.y)*1.1,(z-.72)*.7),.17)*front;
+    regions.upLip[i]=gauss(Math.hypot(x,(y-MOUTH.y-.085)*1.6,(z-MOUTH.z)*.6),.2)*front;
+    regions.lowLip[i]=gauss(Math.hypot(x,(y-MOUTH.y+.095)*1.6,(z-MOUTH.z)*.6),.2)*front;
+    regions.cheekL[i]=gauss(Math.hypot(x+.36,(y+.1)*1.1,(z-.52)*.8),.24)*front;
+    regions.cheekR[i]=gauss(Math.hypot(x-.36,(y+.1)*1.1,(z-.52)*.8),.24)*front;
+    regions.noseL[i]=gauss(Math.hypot(x+.09,(y+.08)*1.2,(z-.82)*.7),.14)*front;
+    regions.noseR[i]=gauss(Math.hypot(x-.09,(y+.08)*1.2,(z-.82)*.7),.14)*front;
+    regions.underEyeL[i]=gauss(Math.hypot(x+EYE.x,(y-EYE.y+.1)*1.3,(z-.6)*.7),.15)*front;
+    regions.underEyeR[i]=gauss(Math.hypot(x-EYE.x,(y-EYE.y+.1)*1.3,(z-.6)*.7),.15)*front;
+  }
+  buildEyes();buildBrows();buildMouth();buildExtras();
+}
+function buildEyes(){
+  const g=new THREE.SphereGeometry(EYE.r,28,22);
+  MAT.sclera=new THREE.MeshPhysicalMaterial({color:0xf2efe9,roughness:.12,clearcoat:1,
+    clearcoatRoughness:.05,envMapIntensity:1.4});
+  MAT.iris=new THREE.MeshStandardMaterial({color:0x5b8c6a,roughness:.25,metalness:.1,envMapIntensity:1.2});
+  MAT.pupil=new THREE.MeshBasicMaterial({color:0x07090c});
+  const mk=sx=>{
+    const grp=new THREE.Group();
+    const ball=new THREE.Mesh(g,MAT.sclera);ball.castShadow=false;grp.add(ball);
+    const ir=new THREE.Mesh(new THREE.CircleGeometry(EYE.r*.52,24),MAT.iris);
+    ir.position.z=EYE.r*.87;grp.add(ir);
+    const pu=new THREE.Mesh(new THREE.CircleGeometry(EYE.r*.23,20),MAT.pupil);
+    pu.position.z=EYE.r*.885;grp.add(pu);
+    const gl=new THREE.Mesh(new THREE.CircleGeometry(EYE.r*.13,14),
+      new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:.9}));
+    gl.position.set(-EYE.r*.22*sx,EYE.r*.26,EYE.r*.9);grp.add(gl);
+    grp.position.set(sx*EYE.x,EYE.y,EYE.z);
+    headGrp.add(grp);return {grp,ir,pu};
+  };
+  const L=mk(-1),R=mk(1);eyeL=L.grp;eyeR=R.grp;irisL=L.ir;irisR=R.ir;
+  // веки: сферические «шапки» чуть больше глаза, вращаются вокруг центра глаза
+  MAT.lid=new THREE.MeshPhysicalMaterial({color:0xd8a080,roughness:.6,clearcoat:.15,
+    side:THREE.DoubleSide,envMapIntensity:.8});
+  const lidGeo=new THREE.SphereGeometry(EYE.r*1.07,26,18,0,Math.PI*2,0,Math.PI*.52);
+  const mkLid=(sx,upper)=>{
+    const m=new THREE.Mesh(lidGeo,MAT.lid);m.castShadow=true;
+    const p=new THREE.Group();p.position.set(sx*EYE.x,EYE.y,EYE.z);p.add(m);
+    if(!upper)m.rotation.x=Math.PI;
+    headGrp.add(p);return p;
+  };
+  lidUL=mkLid(-1,true);lidLL=mkLid(-1,false);
+  lidUR=mkLid(1,true);lidLR=mkLid(1,false);
+}
+function buildBrows(){
+  MAT.brow=new THREE.MeshStandardMaterial({color:0x3a2418,roughness:.85});
+  const mk=sx=>{
+    const pts=[];
+    for(let i=0;i<=10;i++){const t=i/10;
+      pts.push(new THREE.Vector3(sx*(.1+t*.27),.21+Math.sin(t*Math.PI)*.028-t*.012,
+        .66-Math.pow(t,2)*.14))}
+    const curve=new THREE.CatmullRomCurve3(pts);
+    const m=new THREE.Mesh(new THREE.TubeGeometry(curve,20,.028,8,false),MAT.brow);
+    m.castShadow=true;
+    const p=new THREE.Group();p.add(m);headGrp.add(p);return p;
+  };
+  browL=mk(-1);browR=mk(1);
+}
+/* ── губы: кольцо вершин, пересчитываемое каждый кадр ── */
+const LIPN=40;
+function buildMouth(){
+  MAT.lip=new THREE.MeshPhysicalMaterial({color:0xb5614f,roughness:.38,clearcoat:.5,
+    clearcoatRoughness:.25,envMapIntensity:1});
+  MAT.cav=new THREE.MeshBasicMaterial({color:0x1a0a0c});
+  MAT.teeth=new THREE.MeshPhysicalMaterial({color:0xfbf8f0,roughness:.25,clearcoat:.6});
+  MAT.tongue=new THREE.MeshPhysicalMaterial({color:0xc4616e,roughness:.45,clearcoat:.4});
+  // два кольца: внутренний край губ и внешний
+  lipGeo=new THREE.BufferGeometry();
+  const V=new Float32Array(LIPN*3*3), idx=[];
+  for(let i=0;i<LIPN;i++){
+    const a=i,b=(i+1)%LIPN;
+    idx.push(a,a+LIPN,b, b,a+LIPN,b+LIPN);              // внутреннее → среднее
+    idx.push(a+LIPN,a+2*LIPN,b+LIPN, b+LIPN,a+2*LIPN,b+2*LIPN); // среднее → внешнее
+  }
+  lipGeo.setAttribute("position",new THREE.BufferAttribute(V,3));
+  lipGeo.setIndex(idx);
+  lips=new THREE.Mesh(lipGeo,MAT.lip);lips.castShadow=true;headGrp.add(lips);
+  cavity=new THREE.Mesh(new THREE.CircleGeometry(1,28),MAT.cav);headGrp.add(cavity);
+  teethU=new THREE.Mesh(new THREE.BoxGeometry(.2,.045,.05),MAT.teeth);headGrp.add(teethU);
+  teethL=new THREE.Mesh(new THREE.BoxGeometry(.18,.04,.05),MAT.teeth);headGrp.add(teethL);
+  tongue=new THREE.Mesh(new THREE.SphereGeometry(.075,14,10),MAT.tongue);
+  tongue.scale.set(1.25,.45,1.1);headGrp.add(tongue);
+}
+function buildExtras(){
+  // шея и плечи, чтобы голова не висела в пустоте
+  MAT.neck=new THREE.MeshPhysicalMaterial({color:0xd8a080,roughness:.65,envMapIntensity:.7});
+  neck=new THREE.Group();scene.add(neck);
+  const n=new THREE.Mesh(new THREE.CylinderGeometry(.33,.42,.72,24),MAT.neck);
+  n.position.y=-1.18;n.castShadow=true;n.receiveShadow=true;neck.add(n);
+  const sh=new THREE.Mesh(new THREE.CapsuleGeometry(.42,1.25,8,20),
+    new THREE.MeshPhysicalMaterial({color:0x27313f,roughness:.75,sheen:.5,
+      sheenColor:new THREE.Color(0x4a5a74),envMapIntensity:.6}));
+  sh.rotation.z=Math.PI/2;sh.position.y=-1.86;sh.castShadow=true;sh.receiveShadow=true;neck.add(sh);
+  // волосы-шапочка
+  const hg=new THREE.SphereGeometry(1.045,48,36,0,Math.PI*2,0,Math.PI*.46);
+  const hp=hg.attributes.position;
+  for(let i=0;i<hp.count;i++){
+    const v=headShape(new THREE.Vector3(hp.getX(i),hp.getY(i),hp.getZ(i)).normalize());
+    hp.setXYZ(i,v.x*1.045,v.y*1.045+.02,v.z*1.045);
+  }
+  hg.computeVertexNormals();
+  hairCap=new THREE.Mesh(hg,new THREE.MeshPhysicalMaterial({color:0x241a16,roughness:.62,
+    sheen:.7,sheenColor:new THREE.Color(0x6a4a38),envMapIntensity:.8,side:THREE.DoubleSide}));
+  hairCap.castShadow=true;headGrp.add(hairCap);
+  // контрольные точки рига
+  const pts=[];
+  const add=(x,y,z)=>pts.push(x,y,z);
+  add(0,MOUTH.y,MOUTH.z);add(-.17,MOUTH.y,.72);add(.17,MOUTH.y,.72);
+  add(0,MOUTH.y+.085,MOUTH.z);add(0,MOUTH.y-.095,MOUTH.z);
+  add(-EYE.x,EYE.y,EYE.z);add(EYE.x,EYE.y,EYE.z);
+  add(-.26,.22,.66);add(.26,.22,.66);
+  add(-.36,-.1,.52);add(.36,-.1,.52);add(0,-.8,.62);
+  const pg=new THREE.BufferGeometry();
+  pg.setAttribute("position",new THREE.BufferAttribute(new Float32Array(pts),3));
+  rigPts=new THREE.Points(pg,new THREE.PointsMaterial({color:0x49e3a4,size:.055,
+    depthTest:false,transparent:true}));
+  rigPts.visible=false;headGrp.add(rigPts);
+}
+
+/* ═════════ деформация по коэффициентам ═════════ */
+const _v=new THREE.Vector3();
+function deform(){
+  const pos=skullGeo.attributes.position, n=pos.count;
+  const jaw=B("jawOpen"), jawF=B("jawForward"), jawL=B("jawLeft"), jawR=B("jawRight");
+  const puff=B("cheekPuff"), sqL=B("cheekSquintLeft"), sqR=B("cheekSquintRight");
+  const smL=B("mouthSmileLeft"), smR=B("mouthSmileRight");
+  const frL=B("mouthFrownLeft"), frR=B("mouthFrownRight");
+  const puck=B("mouthPucker"), funnel=B("mouthFunnel");
+  const strL=B("mouthStretchLeft"), strR=B("mouthStretchRight");
+  const upL=B("mouthUpperUpLeft"), upR=B("mouthUpperUpRight");
+  const dnL=B("mouthLowerDownLeft"), dnR=B("mouthLowerDownRight");
+  const snL=B("noseSneerLeft"), snR=B("noseSneerRight");
+  const mL=B("mouthLeft"), mR=B("mouthRight");
+  const shrU=B("mouthShrugUpper"), shrD=B("mouthShrugLower");
+  const dimL=B("mouthDimpleLeft"), dimR=B("mouthDimpleRight");
+  for(let i=0;i<n;i++){
+    let x=base[i*3],y=base[i*3+1],z=base[i*3+2];
+    const wJ=regions.jaw[i], wM=regions.mouth[i];
+    // челюсть вниз и вперёд
+    y-=wJ*jaw*.30; z+=wJ*(jaw*.03+jawF*.07); x+=wJ*(jawR-jawL)*.06;
+    // уголки рта
+    const cL=regions.cornerL[i], cR=regions.cornerR[i];
+    y+=cL*(smL*.11-frL*.09)+cR*(smR*.11-frR*.09);
+    x-=cL*(smL*.05+strL*.07)-cR*(smR*.05+strR*.07);
+    z-=cL*(dimL*.035)+cR*(dimR*.035);
+    // губы вверх/вниз
+    y+=regions.upLip[i]*(upL+upR)*.5*.05+regions.upLip[i]*shrU*.03;
+    y-=regions.lowLip[i]*(dnL+dnR)*.5*.06;
+    y+=regions.lowLip[i]*shrD*.025;
+    // трубочка и воронка
+    const pk=puck*.9+funnel*.4;
+    x-=wM*x*pk*.45; z+=wM*pk*.1;
+    // сдвиг рта вбок
+    x+=wM*(mR-mL)*.07;
+    // щёки
+    x+=regions.cheekL[i]*(-puff*.1)+regions.cheekR[i]*(puff*.1);
+    z+=(regions.cheekL[i]+regions.cheekR[i])*puff*.05;
+    y+=regions.cheekL[i]*sqL*.04+regions.cheekR[i]*sqR*.04;
+    y+=regions.underEyeL[i]*sqL*.03+regions.underEyeR[i]*sqR*.03;
+    // носогубная
+    y+=regions.noseL[i]*snL*.045+regions.noseR[i]*snR*.045;
+    z+=regions.noseL[i]*snL*.02+regions.noseR[i]*snR*.02;
+    pos.setXYZ(i,x,y,z);
+  }
+  pos.needsUpdate=true;
+  skullGeo.computeVertexNormals();
+}
+/* веки, глаза, брови */
+function driveEyes(){
+  for(const [sx,blink,wide,squint,lu,ll,iris,eye,inN,outN,upN,dnN] of [
+    [-1,"eyeBlinkLeft","eyeWideLeft","eyeSquintLeft",lidUL,lidLL,irisL,eyeL,
+      "eyeLookInLeft","eyeLookOutLeft","eyeLookUpLeft","eyeLookDownLeft"],
+    [ 1,"eyeBlinkRight","eyeWideRight","eyeSquintRight",lidUR,lidLR,irisR,eyeR,
+      "eyeLookInRight","eyeLookOutRight","eyeLookUpRight","eyeLookDownRight"]]){
+    const bl=B(blink), wd=B(wide), sq=B(squint);
+    // верхнее веко: открыто = откинуто назад, закрыто = опущено до центра
+    const openU=-.52+wd*.18;                 // поворот в открытом состоянии
+    const closeU=.55;
+    lu.rotation.x=lerp(openU,closeU,bl);
+    const openL=.46-sq*.2;
+    ll.rotation.x=-lerp(openL,-.34,bl*.9);
+    // взгляд
+    const gx=(B(outN)-B(inN))*sx, gy=B(upN)-B(dnN);
+    eye.rotation.y=clamp(gx*.6,-.5,.5);
+    eye.rotation.x=clamp(-gy*.5,-.4,.4);
+  }
+}
+function driveBrows(){
+  for(const [side,grp,dn,out] of [[-1,browL,"browDownLeft","browOuterUpLeft"],
+                                  [ 1,browR,"browDownRight","browOuterUpRight"]]){
+    const inner=B("browInnerUp"), d=B(dn), o=B(out);
+    grp.position.y=inner*.045+o*.05-d*.055;
+    grp.rotation.z=side*(inner*.16-o*.13+d*.1);
+    grp.position.z=-d*.012;
+  }
+}
+/* губы: пересчёт кольца */
+function driveLips(){
+  const jaw=B("jawOpen"), puck=B("mouthPucker"), fun=B("mouthFunnel");
+  const smL=B("mouthSmileLeft"), smR=B("mouthSmileRight");
+  const frL=B("mouthFrownLeft"), frR=B("mouthFrownRight");
+  const close=B("mouthClose"), rollU=B("mouthRollUpper"), rollD=B("mouthRollLower");
+  const prL=B("mouthPressLeft"), prR=B("mouthPressRight");
+  const upL=B("mouthUpperUpLeft"), upR=B("mouthUpperUpRight");
+  const dnL=B("mouthLowerDownLeft"), dnR=B("mouthLowerDownRight");
+  const mL=B("mouthLeft"), mR=B("mouthRight");
+  const open=Math.max(0,jaw-close*.8);
+  const W=(.155+fun*.01)*(1-puck*.4)*(1+(smL+smR)*.5*.12);
+  const Hup=.022+open*.11+fun*.012-rollU*.01-(prL+prR)*.5*.008;
+  const Hdn=.028+open*.17+fun*.015-rollD*.012-(prL+prR)*.5*.008;
+  const arr=lipGeo.attributes.position.array;
+  const cx=(mR-mL)*.045, cy=MOUTH.y, cz=MOUTH.z+puck*.07;
+  for(let i=0;i<LIPN;i++){
+    const t=i/LIPN*Math.PI*2, c=Math.cos(t), s=Math.sin(t);
+    const up=s>0;
+    let x=c*W, y=s*(up?Hup:Hdn);
+    // уголки вверх от улыбки, вниз от грусти
+    const cw=c*c*Math.sign(c);
+    y+=(c>0?smR*.062-frR*.05:smL*.062-frL*.05)*c*c;
+    // губной бантик сверху, полнее снизу
+    if(up)y+=Math.pow(Math.abs(c),3)*.004-(1-Math.abs(c))*.006;
+    y+=up?(upL+upR)*.5*.016:-(dnL+dnR)*.5*.02;
+    const z=cz+(1-Math.abs(c))*.012+puck*.02;
+    // три кольца: внутреннее, среднее (гребень губы), внешнее
+    const put=(ring,k,zz)=>{const o=(ring*LIPN+i)*3;
+      arr[o]=cx+x*k;arr[o+1]=cy+y*k;arr[o+2]=zz};
+    put(0,1,z+.004);
+    put(1,1.38-puck*.1,z+.022+puck*.012);
+    put(2,1.95-puck*.15,z-.012);
+  }
+  lipGeo.attributes.position.needsUpdate=true;
+  lipGeo.computeVertexNormals();
+  // полость, зубы, язык
+  cavity.position.set(cx,cy-open*.03,cz-.045);
+  cavity.scale.set(W*1.05,Math.max(.012,(Hup+Hdn)*.95),1);
+  teethU.visible=teethL.visible=open>.06;
+  teethU.position.set(cx,cy+Hup*.58+.004,cz-.02);
+  teethU.scale.set(Math.max(.4,W/.155),1,1);
+  teethL.position.set(cx,cy-Hdn*.62-.004,cz-.025);
+  teethL.scale.set(Math.max(.4,W/.155),1,1);
+  tongue.visible=open>.3;
+  tongue.position.set(cx,cy-Hdn*.45,cz-.055+open*.012);
+  tongue.scale.set(W*7.2,.4+open*.2,1.05);
+}
+
+/* ═════════ вид и материалы ═════════ */
+function applySkin(){
+  const s=SKINS[S.skin];
+  MAT.skin.color.setHex(s.skin);MAT.lid.color.setHex(s.skin);MAT.neck.color.setHex(s.skin);
+  MAT.lip.color.setHex(s.lip);MAT.brow.color.setHex(s.brow);
+  MAT.iris.color.setHex(s.iris);MAT.sclera.color.setHex(s.sclera);
+  hairCap.material.color.setHex(s.brow);
+}
+const VIEWS={
+  face:{pos:[0,.08,3.35],look:[0,.02,0],fov:26},
+  three_q:{pos:[1.5,.25,2.95],look:[0,0,.1],fov:28},
+  wide:{pos:[0,-.5,5.1],look:[0,-.75,0],fov:32}
+};
+function setView(k){
+  S.view=k;const v=VIEWS[k];
+  const h=$("#viewMode");[...h.children].forEach(c=>c.classList.toggle("on",c.dataset.k===k));
+  cam3.position.set(...v.pos);cam3.fov=v.fov;cam3.updateProjectionMatrix();
+  cam3.lookAt(...v.look);
+}
+
+/* ═════════ превью ═════════ */
+const FACE_OVAL=[10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,
+  152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109];
+function drawPip(lmk){
+  const W=pipc.width,H=pipc.height;
+  pctx.save();if(S.mirror){pctx.translate(W,0);pctx.scale(-1,1)}
+  pctx.drawImage(video,0,0,W,H);pctx.restore();
+  pctx.fillStyle="rgba(5,7,11,.3)";pctx.fillRect(0,0,W,H);
+  if(lmk){
+    const px=p=>[(S.mirror?1-p.x:p.x)*W,p.y*H];
+    pctx.fillStyle="rgba(73,227,164,.6)";
+    for(let i=0;i<lmk.length;i+=3){const [x,y]=px(lmk[i]);pctx.fillRect(x,y,1.1,1.1)}
+    pctx.strokeStyle="rgba(90,169,255,.85)";pctx.lineWidth=1.4;pctx.beginPath();
+    FACE_OVAL.forEach((id,i)=>{const [x,y]=px(lmk[id]);i?pctx.lineTo(x,y):pctx.moveTo(x,y)});
+    pctx.closePath();pctx.stroke();
+  } else {pctx.fillStyle="#ff5c6c";pctx.font="bold 13px sans-serif";pctx.textAlign="center";
+    pctx.fillText("лицо не найдено",W/2,H/2)}
+}
+
+/* ═════════ цикл ═════════ */
+let tPrev=performance.now();
+function loop(){
+  if(!S.running)return;
+  requestAnimationFrame(loop);
+  if(video.readyState<2)return;
+  const now=performance.now(),dt=Math.min(.05,(now-tPrev)/1000);tPrev=now;
+  S.fps.push(1/Math.max(.001,dt));if(S.fps.length>30)S.fps.shift();
+  if(video.currentTime!==S.lastVT){
+    S.lastVT=video.currentTime;
+    const t0=performance.now();
+    try{S.res=S.face.detectForVideo(video,now)}catch(e){}
+    S.ms.push(performance.now()-t0);if(S.ms.length>20)S.ms.shift();
+  }
+  readFace(S.res);
+  const lmk=S.res?.faceLandmarks?.[0]||null;
+
+  deform();driveEyes();driveBrows();driveLips();
+  if(S.useHead){
+    headGrp.rotation.set(clamp(S.head.pitch,-.7,.7),clamp(S.head.yaw,-.9,.9),clamp(S.head.roll,-.6,.6));
+    headGrp.position.set(Math.sin(S.head.yaw)*.07,-Math.sin(S.head.pitch)*.05,0);
+  } else {headGrp.rotation.set(0,0,0);headGrp.position.set(0,0,0)}
+  skull.material.wireframe=S.wire;lips.material.wireframe=S.wire;
+  rigPts.visible=S.pts;
+  composer.render();
+  drawPip(lmk);
+
+  if(now-(S.uiAt||0)>120){
+    S.uiAt=now;const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+    const f=avg(S.fps);
+    chip("#cFps",Math.round(f)+" к/с",f<22?"bad":f>45?"good":"");
+    chip("#cMs",avg(S.ms).toFixed(1)+" мс");
+    chip("#cFace",S.on?"есть":"нет",S.on?"good":"bad");
+    $("#hHead").textContent=S.on
+      ? `поворот ${(S.head.yaw*57.3).toFixed(0).padStart(4)}°\nнаклон  ${(S.head.pitch*57.3).toFixed(0).padStart(4)}°\nкрен    ${(S.head.roll*57.3).toFixed(0).padStart(4)}°`
+      : "";
+    $("#hNote").textContent=S.freeze?"ВЫРАЖЕНИЕ ЗАМОРОЖЕНО — F, чтобы отпустить":"";
+    for(const n in bsEls){
+      const v=S.raw[n]||0,e=bsEls[n];
+      e.bar.style.width=(v*100).toFixed(1)+"%";
+      e.val.textContent=v>.005?v.toFixed(2).slice(1):"—";
+      e.row.style.display=(S.onlyLive&&v<.04&&!WIRED.has(n))?"none":"grid";
+      e.row.style.opacity=v>.04?1:.45;
+    }
+  }
+}
+
+/* ═════════ UI ═════════ */
+(function(){const h=$("#viewMode");[...h.children].forEach(b=>b.onclick=()=>setView(b.dataset.k))})();
+(function(){const h=$("#skinMode");[...h.children].forEach(b=>b.onclick=()=>{
+  S.skin=b.dataset.k;[...h.children].forEach(c=>c.classList.toggle("on",c===b));
+  if(MAT.skin)applySkin()})})();
+$("#optWire").onchange=e=>S.wire=e.target.checked;
+$("#optPts").onchange=e=>S.pts=e.target.checked;
+$("#optHead").onchange=e=>S.useHead=e.target.checked;
+$("#optMirror").onchange=e=>S.mirror=e.target.checked;
+$("#optFreeze").onchange=e=>S.freeze=e.target.checked;
+$("#optOnlyLive").onchange=e=>S.onlyLive=e.target.checked;
+addEventListener("keydown",e=>{if(e.key==="f"||e.key==="F"||e.key==="а"||e.key==="А"){
+  S.freeze=!S.freeze;$("#optFreeze").checked=S.freeze}});
+$("#btnStart").onclick=async()=>{
+  const b=$("#btnStart");b.disabled=true;gateErr.textContent="";
+  try{
+    b.textContent="качаю MediaPipe…";await loadMP();
+    b.textContent="спрашиваю камеру…";await startCamera();
+    b.textContent="модель лица…";await buildFace();
+    b.textContent="леплю голову…";initThree();
+    gate.classList.add("hidden");
+    S.running=true;tPrev=performance.now();loop();
+  }catch(e){
+    gateErr.textContent="Не вышло: "+(e?.message||e)+
+      "\nЕсли дело в камере — открой страницу по https:// или http://localhost.";
+    b.disabled=false;b.textContent="Попробовать снова";
+  }
+};
+window.__ready=true;
+</script>
+</body>
+</html>
