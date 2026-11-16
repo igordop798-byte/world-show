@@ -299,13 +299,17 @@ async function loadHead(){
     if(o.material){o.material.envMapIntensity=.55;o.material.roughness=.72}}});
   root.add(inner);
   // центрируем голову в нуле и приводим к понятному масштабу
+  // масштаб и центровка в два шага: сначала масштабируем, потом меряем заново и сдвигаем.
+  // в один шаг нельзя — у сцены своя позиция, и вычитание центра её не учитывает
+  inner.updateMatrixWorld(true);
+  const b1=new THREE.Box3().setFromObject(head);
+  const k=1/Math.max(b1.getSize(new THREE.Vector3()).y,.001);
+  inner.scale.multiplyScalar(k);
+  inner.updateMatrixWorld(true);
+  const b2=new THREE.Box3().setFromObject(head);
+  inner.position.sub(b2.getCenter(new THREE.Vector3()));
   inner.updateMatrixWorld(true);
   headBox=new THREE.Box3().setFromObject(head);
-  const size=new THREE.Vector3(),ctr=new THREE.Vector3();
-  headBox.getSize(size);headBox.getCenter(ctr);
-  const k=1/Math.max(size.y,.001);
-  inner.scale.multiplyScalar(k);
-  inner.position.sub(ctr.multiplyScalar(k));
   // карта морфов
   const dict=head.morphTargetDictionary||{};
   influences=head.morphTargetInfluences;
@@ -335,16 +339,20 @@ function buildHair(){
   const mat=new THREE.MeshStandardMaterial({color:HAIRS.dark,roughness:.6,metalness:.05,
     envMapIntensity:.45,side:THREE.DoubleSide});
   hair=new THREE.Mesh(geo,mat);
+  // ребёнок самой головы: так он наследует её масштаб и смещение, а своим
+  // локальным масштабом лишь раздувается вокруг центра геометрии
   hair.scale.setScalar(s);hair.position.copy(C).multiplyScalar(1-s);
-  hair.castShadow=true;head.parent.add(hair);
+  hair.castShadow=true;head.add(hair);
   // куда смотрит лицо — по положению глаз относительно центра головы
   root.updateMatrixWorld(true);
-  const hc=new THREE.Vector3().setFromMatrixPosition(head.matrixWorld);
+  const bb=new THREE.Box3().setFromObject(head);
+  const size=bb.getSize(new THREE.Vector3()), ctr=bb.getCenter(new THREE.Vector3());
   const e1=new THREE.Vector3().setFromMatrixPosition(eyeL.matrixWorld);
   const e2=new THREE.Vector3().setFromMatrixPosition(eyeR.matrixWorld);
-  const front=Math.sign(e1.add(e2).multiplyScalar(.5).z-hc.z)||1;
+  const front=Math.sign(e1.add(e2).multiplyScalar(.5).z-ctr.z)||1;
+  // линия роста волос считается от реальных размеров головы, а не от угаданных чисел
   const n=new THREE.Vector3(0,.857,-.514*front).normalize();
-  const pt=new THREE.Vector3(0,.17,.42*front);
+  const pt=new THREE.Vector3(ctr.x,bb.min.y+size.y*.70,ctr.z+size.z*.26*front);
   hairLocal=new THREE.Plane().setFromNormalAndCoplanarPoint(n,pt);
   hairWorld=hairLocal.clone();
   mat.clippingPlanes=[hairWorld];
